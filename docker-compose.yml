@@ -1,0 +1,68 @@
+version: '3'
+services:
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+    command: >
+      /bin/bash -c "gcloud beta emulators pubsub start --project=dynatrace-pubsub-poc --host-port=0.0.0.0:8085 && gcloud beta emulators pubsub env-init"
+    ports:
+      - "8085:8085"
+    environment:
+      - PUBSUB_EMULATOR_HOST=0.0.0.0:8085
+      - PUBSUB_PROJECT_ID=dynatrace-pubsub-poc
+    networks:
+      - pubsub-network
+
+  order-app:
+    build:
+      context: ./order/docker
+      dockerfile: Dockerfile
+      args:
+        DYNATRACE_ENVIRONMENT: ${DYNATRACE_ENVIRONMENT}
+        DYNATRACE_TOKEN: ${DYNATRACE_TOKEN}
+    ports:
+      - "8080:8080"
+    environment:
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - PUBSUB_PROJECT_ID=dynatrace-pubsub-poc
+    networks:
+      - pubsub-network
+    depends_on:
+      - pubsub-emulator
+
+  analytics-app:
+    build:
+      context: ./analytics/docker
+      dockerfile: Dockerfile
+      args:
+        DYNATRACE_ENVIRONMENT: ${DYNATRACE_ENVIRONMENT}
+        DYNATRACE_TOKEN: ${DYNATRACE_TOKEN}
+    ports:
+      - "8090:8090"
+    environment:
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - PUBSUB_PROJECT_ID=dynatrace-pubsub-poc
+    networks:
+      - pubsub-network
+    depends_on:
+      - pubsub-emulator
+      - order-app
+
+  client-app:
+    build:
+      context: ./client/docker
+      dockerfile: Dockerfile
+      args:
+        DYNATRACE_ENVIRONMENT: ${DYNATRACE_ENVIRONMENT}
+        DYNATRACE_TOKEN: ${DYNATRACE_TOKEN}
+    ports:
+      - "8083:8083"
+    networks:
+      - pubsub-network
+    depends_on:
+      - pubsub-emulator
+      - order-app
+      - analytics-app
+
+networks:
+  pubsub-network:
+
